@@ -179,13 +179,29 @@ private struct Connection {
 
 private struct SocketLineReader {
     let descriptor: Int32
+    private var buffer = [UInt8](repeating: 0, count: 4096)
+    private var position = 0
+    private var limit = 0
 
     mutating func readLine() throws -> String? {
         var bytes: [UInt8] = []
-        var byte: UInt8 = 0
 
         while true {
-            let count = Darwin.recv(descriptor, &byte, 1, 0)
+            if position < limit {
+                let remaining = buffer[position..<limit]
+                if let newline = remaining.firstIndex(of: 10) {
+                    bytes.append(contentsOf: buffer[position..<newline])
+                    position = newline + 1
+                    if bytes.last == 13 { bytes.removeLast() }
+                    return String(decoding: bytes, as: UTF8.self)
+                }
+                bytes.append(contentsOf: remaining)
+                position = limit
+            }
+
+            let count = buffer.withUnsafeMutableBytes { storage in
+                Darwin.recv(descriptor, storage.baseAddress, storage.count, 0)
+            }
             if count == 0 {
                 return bytes.isEmpty ? nil : String(decoding: bytes, as: UTF8.self)
             }
@@ -193,11 +209,8 @@ private struct SocketLineReader {
                 if errno == EINTR { continue }
                 throw MPDClientError.disconnected
             }
-            if byte == 10 {
-                if bytes.last == 13 { bytes.removeLast() }
-                return String(decoding: bytes, as: UTF8.self)
-            }
-            bytes.append(byte)
+            position = 0
+            limit = count
         }
     }
 }

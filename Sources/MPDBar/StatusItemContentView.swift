@@ -41,9 +41,12 @@ final class StatusItemContentView: NSView {
 
 private final class MarqueeTitleView: NSView {
     private let scrollSpeed: CGFloat = 38 // Points per second.
+    private let framesPerSecond: TimeInterval = 20
     private let gap = "     "
+    private let font = NSFont.menuBarFont(ofSize: 0)
     private var title = ""
     private var cycleWidth: CGFloat = 0
+    private var textHeight: CGFloat = 0
     private var scrollStart: TimeInterval = 0
     private var timer: Timer?
 
@@ -52,12 +55,9 @@ private final class MarqueeTitleView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard !title.isEmpty else { return }
 
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.menuBarFont(ofSize: 0),
-            .foregroundColor: NSColor.labelColor
-        ]
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor]
         let text = title as NSString
-        let y = floor((bounds.height - text.size(withAttributes: attributes).height) / 2)
+        let y = floor((bounds.height - textHeight) / 2)
         let offset: CGFloat = timer == nil ? 0 : CGFloat(
             (ProcessInfo.processInfo.systemUptime - scrollStart) * Double(scrollSpeed)
         ).truncatingRemainder(dividingBy: cycleWidth)
@@ -77,13 +77,15 @@ private final class MarqueeTitleView: NSView {
         timer = nil
         title = newTitle
 
-        let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.menuBarFont(ofSize: 0)]
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        textHeight = (newTitle as NSString).size(withAttributes: attributes).height
         let titleWidth = (newTitle as NSString).size(withAttributes: attributes).width
         cycleWidth = ((newTitle + gap) as NSString).size(withAttributes: attributes).width
         scrollStart = ProcessInfo.processInfo.systemUptime
 
-        if titleWidth > StatusItemContentView.width - 38 {
-            let timer = Timer(timeInterval: 1.0 / 60, target: self, selector: #selector(tick(_:)), userInfo: nil, repeats: true)
+        if titleWidth > bounds.width {
+            let timer = Timer(timeInterval: 1.0 / framesPerSecond, target: self, selector: #selector(tick(_:)), userInfo: nil, repeats: true)
+            timer.tolerance = 0.01
             RunLoop.main.add(timer, forMode: .common)
             self.timer = timer
         }

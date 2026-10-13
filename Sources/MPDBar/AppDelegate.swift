@@ -42,6 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var timer: Timer?
     private var currentSnapshot: MPDSnapshot?
+    private var currentStatusSymbol: String?
+    private var currentToggleIsPlaying: Bool?
     private var refreshInFlight = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -65,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let button = statusItem.button else { return }
         button.title = ""
         statusContent.frame = button.bounds
-        statusContent.setIcon(symbol("music.note"))
+        setStatusSymbol("music.note")
         statusContent.setTitle("MPD")
         button.addSubview(statusContent)
         button.toolTip = "MPD Bar"
@@ -100,6 +102,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)
         image?.isTemplate = true
         return image
+    }
+
+    private func setStatusSymbol(_ name: String) {
+        guard name != currentStatusSymbol else { return }
+        currentStatusSymbol = name
+        statusContent.setIcon(symbol(name))
     }
 
     private var configuration: MPDConfiguration {
@@ -169,10 +177,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let isPlaying = snapshot.state == .playing
         toggleItem.title = isPlaying ? "Pause" : "Play"
-        toggleItem.image = symbol(isPlaying ? "pause.fill" : "play.fill")
+        if currentToggleIsPlaying != isPlaying {
+            toggleItem.image = symbol(isPlaying ? "pause.fill" : "play.fill")
+            currentToggleIsPlaying = isPlaying
+        }
 
         guard let button = statusItem.button else { return }
-        statusContent.setIcon(symbol(statusSymbol(snapshot.state)))
+        setStatusSymbol(statusSymbol(snapshot.state))
         switch snapshot.state {
         case .playing, .paused:
             statusContent.setTitle(snapshot.song?.displayTitle ?? "MPD")
@@ -190,7 +201,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         nextItem.isEnabled = false
 
         guard let button = statusItem.button else { return }
-        statusContent.setIcon(symbol("exclamationmark.triangle"))
+        setStatusSymbol("exclamationmark.triangle")
         statusContent.setTitle("MPD Offline")
         button.toolTip = message
     }
