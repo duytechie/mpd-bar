@@ -2,7 +2,7 @@
 
 A small, native macOS menu-bar controller for [Music Player Daemon](https://www.musicpd.org/), built with Swift and AppKit. It is designed for Apple silicon and has no third-party dependencies.
 
-The menu-bar item shows the current artist/title and whether MPD is playing, paused, stopped, or unavailable. Its menu provides:
+The compact menu-bar item shows the current artist/title, scrolling long names from right to left, and indicates whether MPD is playing, paused, stopped, or unavailable. Its menu provides:
 
 - Previous track
 - Play / pause
