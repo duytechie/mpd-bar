@@ -19,11 +19,8 @@ private enum CommandResult: Sendable {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    private static let songItemWidth: CGFloat = 165
-    private static let songTextWidth: CGFloat = 128
-    private static let marqueeInterval: TimeInterval = 0.18
-
-    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    private let statusItem = NSStatusBar.system.statusItem(withLength: StatusItemContentView.width)
+    private let statusContent = StatusItemContentView(frame: .zero)
     private let menu = NSMenu()
     private let nowPlayingItem = NSMenuItem(title: "Connecting…", action: nil, keyEquivalent: "")
     private let detailsItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -44,10 +41,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     )
 
     private var timer: Timer?
-    private var marqueeTimer: Timer?
-    private var marqueeTitle: String?
-    private var marqueeCharacters: [Character] = []
-    private var marqueeOffset = 0
     private var currentSnapshot: MPDSnapshot?
     private var refreshInFlight = false
 
@@ -62,7 +55,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         timer?.invalidate()
-        marqueeTimer?.invalidate()
     }
 
     func menuWillOpen(_ menu: NSMenu) {
@@ -71,9 +63,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func configureStatusItem() {
         guard let button = statusItem.button else { return }
-        button.image = symbol("music.note")
-        button.imagePosition = .imageLeading
-        button.title = "MPD"
+        button.title = ""
+        statusContent.frame = button.bounds
+        statusContent.setIcon(symbol("music.note"))
+        statusContent.setTitle("MPD")
+        button.addSubview(statusContent)
         button.toolTip = "MPD Bar"
         statusItem.menu = menu
     }
@@ -178,12 +172,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggleItem.image = symbol(isPlaying ? "pause.fill" : "play.fill")
 
         guard let button = statusItem.button else { return }
-        button.image = symbol(statusSymbol(snapshot.state))
+        statusContent.setIcon(symbol(statusSymbol(snapshot.state)))
         switch snapshot.state {
         case .playing, .paused:
-            showSongTitle(snapshot.song?.displayTitle)
+            statusContent.setTitle(snapshot.song?.displayTitle ?? "MPD")
         case .stopped, .unknown:
-            showSongTitle(nil)
+            statusContent.setTitle("MPD")
         }
         button.toolTip = "\(songTitle)\n\(detailsItem.title)"
     }
@@ -196,10 +190,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         nextItem.isEnabled = false
 
         guard let button = statusItem.button else { return }
-        button.image = symbol("exclamationmark.triangle")
-        stopMarquee()
-        statusItem.length = NSStatusItem.variableLength
-        button.title = "MPD Offline"
+        statusContent.setIcon(symbol("exclamationmark.triangle"))
+        statusContent.setTitle("MPD Offline")
         button.toolTip = message
     }
 
@@ -219,62 +211,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .stopped: "stop.circle"
         case .unknown: "questionmark.circle"
         }
-    }
-
-    private func showSongTitle(_ title: String?) {
-        guard let button = statusItem.button else { return }
-        guard let title, !title.isEmpty else {
-            stopMarquee()
-            statusItem.length = NSStatusItem.variableLength
-            button.title = "MPD"
-            return
-        }
-
-        statusItem.length = Self.songItemWidth
-        guard marqueeTitle != title else { return }
-        stopMarquee()
-        marqueeTitle = title
-
-        guard textWidth(title, for: button) > Self.songTextWidth else {
-            button.title = title
-            return
-        }
-
-        marqueeCharacters = Array(title + "     ")
-        renderMarquee(on: button)
-        marqueeTimer = Timer.scheduledTimer(withTimeInterval: Self.marqueeInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.advanceMarquee() }
-        }
-    }
-
-    private func advanceMarquee() {
-        guard !marqueeCharacters.isEmpty, let button = statusItem.button else { return }
-        marqueeOffset = (marqueeOffset + 1) % marqueeCharacters.count
-        renderMarquee(on: button)
-    }
-
-    private func renderMarquee(on button: NSStatusBarButton) {
-        var visible = ""
-        for step in 0..<marqueeCharacters.count {
-            let character = marqueeCharacters[(marqueeOffset + step) % marqueeCharacters.count]
-            let candidate = visible + String(character)
-            guard textWidth(candidate, for: button) <= Self.songTextWidth else { break }
-            visible = candidate
-        }
-        button.title = visible
-    }
-
-    private func textWidth(_ text: String, for button: NSStatusBarButton) -> CGFloat {
-        let font = button.font ?? NSFont.menuBarFont(ofSize: 0)
-        return (text as NSString).size(withAttributes: [.font: font]).width
-    }
-
-    private func stopMarquee() {
-        marqueeTimer?.invalidate()
-        marqueeTimer = nil
-        marqueeTitle = nil
-        marqueeCharacters = []
-        marqueeOffset = 0
     }
 
     private func format(_ interval: TimeInterval) -> String {
